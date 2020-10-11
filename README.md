@@ -52,7 +52,7 @@ Here are some the biggest hits (plots) from this project:
 
 <p align="center">
     <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-corr-limit-1.png" width="600">
-    <!-- <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-word-list-size-4.png" width="350"> -->
+    <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-word-list-size-4.png" width="350">
 </p> -->
 
 ## word-network-analysis.Rmd/html
