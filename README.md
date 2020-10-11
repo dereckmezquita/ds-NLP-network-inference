@@ -40,19 +40,19 @@ Here are some the biggest hits (plots) from this project:
 ## text-analysis.Rmd/html
 
 <p align="center">
-    <img src="./reports/text-analysis_files/figure-html/messages-per-month-horiz-1.png" width="500">
-    <img src="./reports/text-analysis_files/figure-html/messages-per-day-dist-1.png" width="500">
-    <img src="./reports/text-analysis_files/figure-html/clockplot-messages-per-hour-1.png" width="500">
-    <img src="./reports/text-analysis_files/figure-html/length-per-cat-bplots-1.png" width="500">
-    <img src="./reports/text-analysis_files/figure-html/plot-favourite-frequencies-1.png" width="500">
-    <img src="./reports/text-analysis_files/figure-html/whole-chat-cloud-1.png" width="500">
+    <img src="./reports/text-analysis_files/figure-html/messages-per-month-horiz-1.png" width="450">
+    <img src="./reports/text-analysis_files/figure-html/messages-per-day-dist-1.png" width="450">
+    <img src="./reports/text-analysis_files/figure-html/clockplot-messages-per-hour-1.png" width="450">
+    <img src="./reports/text-analysis_files/figure-html/length-per-cat-bplots-1.png" width="450">
+    <img src="./reports/text-analysis_files/figure-html/plot-favourite-frequencies-1.png" width="450">
+    <img src="./reports/text-analysis_files/figure-html/whole-chat-cloud-1.png" width="450">
 </p>
 
 <!-- ## word-network-inference.Rmd/html
 
 <p align="center">
     <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-corr-limit-1.png" width="600">
-    <!-- <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-word-list-size-4.png" width="500"> -->
+    <!-- <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-word-list-size-4.png" width="450"> -->
 </p> -->
 
 ## word-network-analysis.Rmd/html
@@ -62,11 +62,11 @@ Here are some the biggest hits (plots) from this project:
 </p>
 
 <p align="center">
-    <img src="./reports/word-network-analysis_files/figure-html/plot-all-layouts-1.png" width="500">
-    <img src="./reports/word-network-analysis_files/figure-html/word-net-reciprocal-1.png" width="500">
-    <img src="./reports/word-network-analysis_files/figure-html/degrees-1.png" width="500">
-    <img src="./reports/word-network-analysis_files/figure-html/degree-distribution-1.png" width="500">
-    <!-- <img src="./reports/word-network-analysis_files/figure-html/degree-barplot-1.png" width="500"> -->
+    <img src="./reports/word-network-analysis_files/figure-html/plot-all-layouts-1.png" width="450">
+    <img src="./reports/word-network-analysis_files/figure-html/word-net-reciprocal-1.png" width="450">
+    <img src="./reports/word-network-analysis_files/figure-html/degrees-1.png" width="450">
+    <img src="./reports/word-network-analysis_files/figure-html/degree-distribution-1.png" width="450">
+    <!-- <img src="./reports/word-network-analysis_files/figure-html/degree-barplot-1.png" width="450"> -->
 </p>
 
 ### Community detection
