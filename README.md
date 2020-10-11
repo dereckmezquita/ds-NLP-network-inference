@@ -20,7 +20,7 @@ Work on this project is done with:
 
 ## Chat data
 
-*This chat data was collected between the dates of: 02 February 2020 - 20 September 2020.
+*This chat data was collected between the dates of: 02 February 2020 - 20 September 2020.*
 
 The data shown and used here is a composite of chat data extracted from **WhatsApp** *and* **Telegram**. My girlfriend and I chat on both applications. The Telegram data was converted from a JSON format exported by Telegram Lite to a `.txt` format to be used by "rwhatsapp" with a custom NodeJS application I wrote for this purpose. You can find the Telegram to WhatsApp converter here on GitHub as a separate project: [dereckdemezquita/telegram-data-formatter](https://github.com/dereckdemezquita/telegram-data-formatter)
 
