@@ -10,6 +10,9 @@ deprecated/
 /reports/*_files/
 /reports/*.md
 
+# Exclude unfinished parts
+identifier-model.Rmd
+
 # System files
 .DS_Store
 
