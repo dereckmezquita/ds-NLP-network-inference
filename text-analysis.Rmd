@@ -1,0 +1,990 @@
+---
+title: "Text analysis"
+author: "Dereck de Mézquita"
+date: "14/09/2020"
+knit: (function(inputFile, encoding) { 
+      rmarkdown::render(inputFile,
+                        encoding=encoding, 
+                        output_file=file.path(dirname(inputFile), "reports", "text-analysis.html")) })
+output: 
+  html_document: 
+    fig_caption: yes
+    keep_md: yes
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 7, fig.height = 7, fig.align = "center")
+```
+
+```{js}
+alert("This report contains multiple plots in the same area, click the tabs above the plots to view.")
+``` 
+
+# Description
+
+Here you'll find a full report on the chat data covering basic statistical and exploratory analysis *report*: `text-analysis.Rmd/html`. Some of the results found in this report are:
+
+- Messages over time: per month, per day of week, per time of day.
+- Characterising messages per author: sentence length, emoji usage, vocabulary used.
+- Wordclouds: for the chat as a whole, and individual authors.
+
+## Project structure
+
+The goal of this project is to analyse chat data with my girlfriend; apply statistical methods, graph theory, and other data science techniques.
+
+Please note that this project is presented in knitted interactive `.html` reports, you can obtain these by downloading them from this github repo at the directory `./reports` *or* you can visit them hosted on my website at: https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/
+
+This project is broken up into three big sub-projects. The project structure is as follows (hosted reports links):
+
+- Text mining, statistical, and exploratory analysis: [derecksnotes.com: text-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/text-analysis.html)
+- Word association network inference: [derecksnotes.com: word-network-inference.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-inference.html)
+- Word association/network topological analysis and visualisation: [derecksnotes.com: word-network-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-analysis.html)
+    - **Bonus -** interactive visualisation of network: [derecksnotes.com: word-network-interactive.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-interactive.html)
+
+# Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+library("rwhatsapp")
+# library("octavius")
+library("tidyverse")
+library("DT")
+
+library("ggthemes")
+library("ggplot2"); theme_set(theme_base())
+library("lubridate")
+library("tidyr")
+
+library("tidytext")
+
+library("stopwords")
+library("tm")
+library("wordcloud")
+```
+
+# Load data and save load
+
+The "rwhatsapp" package's load function is inherently unstable and causes RStudio to crash, I save the object once loaded to avoid this problem.
+
+```{r load-data-save}
+# Date format: [2/1/20, 12:01:05]
+# date_format <- "M/d/yy', HH:mm:ss"
+date_format <- "M/d/yy, HH:mm:ss"
+
+if(!file.exists("./outputs/chat.rds")) {
+	message("Load does not exist. Loading raw and saving object.")
+	chat <- rwa_read("./data/chat.txt", tz = "Europe/Paris", verbose = TRUE, format = date_format) %>% filter(!is.na(author))
+	saveRDS(chat, "./outputs/chat.rds")
+} else {
+	message("Load exists, loading previous RDS.")
+	chat <- readRDS("./outputs/chat.rds")
+}
+```
+
+```{r check-data, include=FALSE}
+is.na(chat$time) %>% sum()
+authors <- as.character(unique(chat$author)) %>% sort(); authors
+```
+
+# Messages over time
+
+## Messages per month & day
+
+The following statistics are relative to the number of messages per month. As can be seen the median is 3684, and the mean at about the same.
+
+```{r messages-freq-stats}
+sum <- dim(chat)[1]
+data <- group_by(chat, month = month(time, label = TRUE, abbr = FALSE)) %>% pull(month) %>% table()
+
+summary(as.vector(data))
+```
+
+The number of messages per month can be seen in the following plot. In order to see a more detailed plot with number of messages per day you can click the next tab.
+
+We in fact met in February of 2020, so 0 for January is correct. It seems that we started off at 3798 texts in the month of February; this is quite close to the median thus far which is at 3684 - see below.
+
+A peak is shown in July, which is quite curious since this was towards the end of my internship for my master's degree. A simple explanation is we had less time to talk and thus compensated by texting more.
+
+#### Plots {.tabset}
+
+```{r messages-per-month-horiz, results="asis", fig.width=7, fig.height=7}
+cat("##### ","Barplot: messages per month", "\n")
+par(mar = c(7, 4.1, 4.1, 0))
+bp <- barplot(
+	data,
+	width = 0.1,
+	ylim = c(0, max(data)*1.1),
+	main = "Total number of messages per month",
+	cex.names = 1,
+	las = 2,
+	space = 0,
+	# border = NA
+)
+title(sub = glue::glue("Total messages sent: {sum}\n Max month: {data[which.max(data)]} messages on {names(which.max(data))}"), line = 6)
+text(x = bp, y = data, labels = data, pos = 3, cex = 0.85, col = "red") #, srt = 90, offset = -1
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+cat("\n\n")
+```
+
+```{r messages-per-day-vert, results="asis", fig.width=7, fig.height=20}
+data <- mutate(chat, day = date(time))
+
+pdata <- table(data$day)
+pdata <- pdata[length(pdata):1]
+
+cat("##### ","Barplot vertical: messages per day", "\n")
+par(mar = c(5.1, 5.5, 2, 0))
+bp <- barplot(
+	pdata,
+	xlim = c(0, max(pdata)*1.1),
+	main = "Number of messages per day",
+	sub = glue::glue("Total messages sent: {sum}\n Max day: {pdata[which.max(pdata)]} messages on {names(which.max(pdata))}"),
+	cex.names = 0.85,
+	horiz = TRUE,
+	las = 2,
+	space = 0,
+	width = 0.1
+)
+# title(, line = 6)
+text(y = bp, x = pdata, labels = pdata, cex = 0.675, col = "red", pos = 4) #, srt = 90, offset = -1
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+cat("\n\n")
+```
+
+### Statistics on messages per day
+
+Let's check the number of messages sent per day's statistics. The median amount of messages sent per day is around 177.
+
+```{r message-per-day-summary}
+summary(as.vector(pdata))
+```
+
+From the plots I noticed in the detailed daily plot that the most messages were sent on 06 September 2020 - 868 and least on 22 April 2020 - 25 messages total sent those days.
+
+```{r message-per-day-min-max}
+pdata[which.max(pdata)]
+pdata[which.min(pdata)]
+```
+
+### Distribution of messages per day
+
+Here is a plot of the distribution along with the relevant statistics.
+
+```{r messages-per-day-dist}
+par(mar = c(5.1, 4.1, 7.5, 2.1))
+plot(density(pdata), main = "")
+title("Messages per day distribution", line = 6.5)
+abline(v = summary(as.vector(pdata)), col = c("blue", "gray", "gold", "gold", "gray", "red"), lty = 2, lwd = 2)
+axis(3, at = summary(as.vector(pdata)), labels = paste(names(summary(as.vector(pdata))), paste0(floor(summary(as.vector(pdata))), "x"), sep = " "), cex.axis = 1, las = 2)
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+### Subset min/max of messages per day
+
+This is interesting, let's check what we talked about on the minimum day, and maximum day.
+
+#### Min messages
+
+*Excluding the most recent day, day of data extraction, being the minimum.*
+
+Let's look at the day with the least amount of messages: 02 February 2020.
+
+```{r table-min-day}
+datatable(data[data$day == names(pdata[which.min(pdata)]), c(-4, -5, -6, -7)])
+```
+
+Simple explanation as to why we spoke so little this day: I had a lot of work, and we mostly talked on the phone/video call. As you can see one of the messages is "How's your work dear?)", and then another is "Try again", by her. She often says this when my call doesn't go through.
+
+#### Max messages
+
+Messages from: 06 September 2020, redacted due to privacy concerns.
+
+```{r table-max-day, eval=FALSE}
+datatable(data[data$day == names(pdata[which.max(pdata)]), c(-4, -5, -6, -7)])
+```
+
+I remember this day clearly. During this time I was traveling in Europe, I was specifically in Greece during this time period. We had not been speaking very much, and the relationship was a bit stressed. We had a disagreement. I tend to send a lot of messages and speak quickly when there is a disagreement; as such 868 were sent this day total.
+
+Let's check how many messages per author were sent.
+
+```{r messages-per-author-angry, fig.width=7, fig.height=4}
+pdata <- table(data[data$day == names(pdata[which.max(pdata)]), 2]) %>% sort()
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+bp <- barplot(
+    pdata,
+    xlim = c(0, max(pdata)*1.1),
+    main = "Number of messages per author; 06 September 2020",
+    horiz = TRUE,
+    las = 1
+)
+text(x = sort(pdata), y = bp, pos = 4, labels = sort(pdata), col = "red")
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+```
+
+As can be seen in the above plot, I indeed sent many more messages than Liza did that day.
+
+## Messages per day of week
+
+Now I check to see if there is a bias as to which day of the week we text on. Maybe Friday or the weekend we text less since we have more time to do video calls.
+
+```{r messages-per-dayweek-data}
+data <- mutate(chat, day = wday(time, label = TRUE, week_start = 1)) %>% pull(day) %>% table() #; data <- data[length(data):1]
+data
+```
+
+
+```{r messages-per-dayweek-summary}
+summary(as.vector(data))
+```
+
+Visually there seems to be a bias towards the week-end; especially Sunday.
+
+```{r messages-per-dayweek, fig.width=7, fig.height=5}
+par(mar = c(5.1, 4.1, 4.1, 1))
+bp <- barplot(
+	data,
+	width = 0.1,
+	ylim = c(0, max(data)*1.1),
+	main = "Number of messages per day of week",
+	cex.names = 1,
+	las = 2
+	# border = NA
+)
+title(sub = glue::glue("Total messages sent: {sum}\n Max day of week: {data[which.max(data)]} messages on {names(which.max(data))}"), line = 6)
+text(x = bp, y = data, labels = data, pos = 3, cex = 1, col = "red") #, srt = 90, offset = -1
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+```
+
+## Clockplot & barplot messages per hour
+
+I've now covered messages per day of the week, now I want to check at which times of the day these messages get sent. The following are what I call "clock-plots". They are wrapped bar plots that allow you to see the data as if it were on a 24 hour clock - 0 at the top is midnight, and 12 at the bottom is midday.
+
+The following statistics are relative to messages per hour. Median at 2126 and the mean at 1919. The max is at 2200 which seems logical as it is towards the end of the day - a time at which we have more opportunity to communicate uninterrupted.
+
+When looking at the plot, we can clearly see that we tend to text more towards the end of the day - between midnight and around 0700 we tend to sleep.
+
+I will soon be moving back to the United States of American from my current residence in France. It will be interesting to observe how, if at all, the time zone change will affect our times of communication. *Note that I will always have time zones and times relative to my current location.*
+
+If you'd like a more traditional view you can click on the barplot tab to view the same data.
+
+```{r messages-per-hour-data}
+data <- hour(chat$time) %>% table()
+summary(as.vector(data))
+```
+
+#### Plots {.tabset}
+
+```{r clockplot-messages-per-hour, echo=TRUE, results="asis", warning=FALSE, message=FALSE, fig.width=7, fig.height=7}
+cat("##### ","Clockplot: messages per hour", "\n")
+library("circlize")
+
+par(mar = c(0, 0, 0, 0))
+circos.par("track.height" = 0.5, start.degree = 98)
+circos.initialize(fa = 0, xlim = c(0, 23.75), sector.width = 0.1)
+circos.track(ylim = c(0, max(data)), bg.border = NA, panel.fun = function(x, y) { # 
+	circos.barplot(data, pos = 1:24 - 0.5, col = "gray") # , col = 1:5
+	circos.text(1:24 - 0.5, data, labels = data, facing = "inside", adj = c(0.5, -1), col = "red")
+	circos.text(1:24 - 0.5, 0, labels = sapply(0:23, paste0, "h"), facing = "inside", adj = c(0.5, 2), col = "black")
+})
+title("Clockplot: number of messages at given hour", line = -1)
+circos.clear()
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+cat("\n\n")
+```
+
+```{r clock-barplot, echo=TRUE, results="asis", warning=FALSE, message=FALSE, fig.width=7, fig.height=7}
+cat("##### ","Barplot: messages per hour", "\n")
+bp <- barplot(
+	data,
+	names.arg = sapply(0:23, paste0, "h"),
+	xlab = "Time of day, 24 hours",
+	ylim = c(0, max(data) * 1.1),
+	cex.names = 1,
+	las = 2,
+	main = "Barplot: number of messages at given hour"
+)
+text(x = bp, y = data + 175, labels = data, cex = 1, srt = 90, col = "red")
+cat("\n\n")
+```
+
+## Clockplot & barplot messages per minute
+
+Considering the interesting "clockplot" shown above I'm interested in seeing if there is any bias whatsoever as to the minute of the hour on which we text.
+
+```{r messages-per-minute-data}
+data <- mutate(chat, minute = minute(time)) %>% pull(minute) %>% table(); data <- data[length(data):1]
+summary(as.vector(data))
+```
+
+There seems to be no bias whatsoever as to the minute of the hour on which we text. Interesting nonetheless. View the clockplot per minute, or the barplot in the next tab for a more conventional illustration.
+
+#### Plots {.tabset}
+
+```{r clockplot-minute, results="asis", warning=FALSE, message=FALSE, fig.width=10, fig.height=10}
+cat("##### ","Barplot: messages per hour", "\n")
+par(mar = c(0, 0, 3, 0))
+circos.par("track.height" = 0.4, start.degree = 93)
+circos.initialize(fa = 0, xlim = c(0, 59.5), sector.width = 0.1)
+circos.track(ylim = c(0, max(data)), bg.border = NA, panel.fun = function(x, y) { # 
+	circos.barplot(data, pos = 1:60 - 0.5, col = "gray") # , col = 1:5
+	circos.text(1:60 - 0.5, data, labels = data, facing = "inside", adj = c(0.5, -1), col = "red")
+	circos.text(1:60 - 0.5, 0, labels = 0:59, facing = "inside", adj = c(0.5, 2), col = "black", cex = 0.85)
+})
+title("Clockplot: number of messages at a given minute", line = 1)
+circos.clear()
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+cat("\n\n")
+```
+
+
+```{r messages-per-minute, results="asis", fig.width=15, fig.height=6}
+cat("##### ","Barplot: messages per hour", "\n")
+par(mar = c(5.1, 4.1, 4.1, 1))
+bp <- barplot(
+	data[length(data):1],
+	width = 0.1,
+	xlab = "Time of day, 24 hours",
+	ylim = c(0, max(data)*1.1),
+	main = "Barplot: number of messages at a given minute",
+	cex.names = 1,
+	las = 2
+	# border = NA
+)
+title(sub = glue::glue("Total messages sent: {sum}\n Max minute: {data[which.max(data)]} messages on {names(which.max(data))}"), line = 6)
+text(x = bp, y = data[length(data):1] + 40, labels = data[length(data):1], srt = 90, cex = 1, col = "red") #, srt = 90, offset = -1
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+cat("\n\n")
+```
+
+# Analysing sentences per author
+
+## Number of messages per author
+
+```{r total-messages, fig.width=7, fig.height=4}
+data <- table(chat$author)
+
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+bp <- barplot(
+	sort(data),
+	xlim = c(0, max(data)*1.125),
+	main = "Number of messages per author",
+	horiz = TRUE,
+	las = 1
+)
+text(x = sort(data), y = bp, pos = 4, labels = sort(data), col = "red")
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Length of messages
+
+I separate the messages per empty strings `" "` ie. spaces. This is to count the number of words per sentence.
+
+```{r n-words}
+data <- list()
+for (i in 1:length(authors)) {
+	data[[i]] <- chat[chat$author == authors[i], ] %>%
+		mutate(length = sapply(strsplit(text, " "), length)) %>%
+		.[order(.[,"length"]),]
+		# dplyr::select(author, length) %>%
+		# pull(length) %>%
+		# table() %>%
+		# sort(decreasing = TRUE)
+}
+
+names(data) <- authors
+```
+
+Interestingly I see that we tend to send *a lot* of one word messages, I suspect these might be emojis.
+
+```{r n-words-barplot, fig.width=7, fig.height=7}
+par(mar = c(5.1, 4.1, 2.1, 0.5), mfrow = c(floor(sqrt(length(data))), ceiling(sqrt(length(data)))))
+pdata <- list()
+for(i in 1:length(data)) {
+	pdata[[i]] <- table(data[[i]]$length) %>% head(15)
+	pdata[[i]] <- pdata[[i]][length(pdata[[i]]):1]
+	bp <- barplot(pdata[[i]],
+					  sub = unique(data[[i]]$author),
+					  xlim = c(0, max(pdata[[i]])*1.3),
+					  ylab = "Words per sentence",
+					  horiz = TRUE,
+					  las = 1)
+    text(x = pdata[[i]], y = bp, labels = pdata[[i]], pos = 4, col = "red")
+}
+title(main = "Sentence lengths",
+        outer = TRUE,
+        line = -1)
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Custom algorithm: find a common message per length
+
+Previously I showed what length of messages we send, now I'm curious to see what the most common message per category is; as characterised by sentence length. I am willing to bet "I love you!" will be a top message in the 3 word category.
+
+First let's separate the data frames into a new object: two lists of lists - one per author and one per message length category.
+
+```{r func-data-common-length-message}
+lengthGroups <- function(df) {
+	grp <- list()
+	for (i in 1:length(unique(df$length))) {
+		grp[[i]] <- df[df$length == unique(df$length)[i],]
+	}
+	return(grp)
+}
+
+cdata <- lapply(data, lengthGroups)
+```
+
+Now let's compare all the phrases per category and find the top phrase per sentence length category. Here I find a frequency "table" of all terms in each list, 2 list (Dereck, Liza) and 71 for Dereck and 53 sentence length categories. Now I have to find the sentence that was repeated most per category. I expect that some categories, especially those with more words will have only unique entries. Those that are unique and do not have an entry superior to 2 will be set to NA. All others can be plotted.
+
+```{r func-per-length-compare}
+wordsFreq <- function(lst, n = 20) {
+	prs <- list()
+	for (i in 1:length(lst)) {
+		hld <- list()
+		for (j in 1:length(lst[[i]])) {
+			hld[[j]] <- table(lst[[i]][[j]]$text) %>% sort() %>% tail(n)
+			# message(length(hld[[j]]))
+			if(length(hld[[j]]) > 2) {
+				hld[[j]] <- hld[[j]]
+			} else {
+				hld[[j]] <- NA
+			}
+		}
+		prs[[i]] <- hld
+	}
+	names(prs) <- names(lst)
+	return(prs)
+}
+
+wfq <- wordsFreq(cdata, 30)
+```
+
+```{r func-plot-per-lcat}
+forPlotWfq <- function(lst, head = 0, top = 10, main = "", tpos = 1, lmar = 17, nme = "Author") {
+	bp <- list()
+	lst <- head(lst, head)
+	par(mfrow = c(3, 2), mar = c(4, lmar, 5, 0))
+	for (i in 1:length(lst)) {
+		bp[[i]] <- barplot(tail(lst[[i]], top),
+								 xlim = c(0, max(lst[[i]])*1.3),
+								 horiz = TRUE,
+								 las = 1,
+								 cex.names = 1.25)
+		title(main = glue::glue("Category length: {i}"), line = tpos)
+		text(x = tail(lst[[i]], top), y = bp[[i]], labels = tail(lst[[i]], top), pos = 4, col = "red")
+	}
+	par(mfrow = c(1, 1), mar = c(5.1, 4.1, 2.1, 2.1))
+	title(main = nme, line = 1)
+}
+```
+
+Unfortunately the current version of R has difficulties handling emoji symbols, as such this first plot is not very useful. I'll handle emojis in the next sections with ggplot2.
+
+The following plots show the most common sentence per length. As I stated before it seems that "I love you!" or a variant thereof is indeed number one for the category of 3 word sentences. 
+
+```{r length-per-cat-bplots, fig.width=10, fig.height=10}
+forPlotWfq(wfq$Dereck, 6, 10, tpos = 0, nme = "Dereck; times phrase used per length category")
+forPlotWfq(wfq$Liza, 6, 10, tpos = 0, nme = "Liza; times phrase used per length category")
+```
+
+# Analysing words and vocabulary
+
+## Emojis per author
+
+I tried to refactor this chunk to base R, however base R cannot handle images as labels for the bars. I kept this modified code. 
+
+I expected heart emojis to show up as the top used but not so many times! Then I remembered at one point we copy pasted heart emojis repeatedly I should now remove this outlier and check for others.
+
+```{r emojis-sent, fig.width=15, fig.height=10}
+library("ggimage")
+emoji_data <- rwhatsapp::emojis %>% # data built into package
+	mutate(hex_runes1 = gsub("\\s[[:alnum:]]+", "", hex_runes)) %>% # ignore combined emojis
+	mutate(emoji_url = paste0(
+		"https://abs.twimg.com/emoji/v2/72x72/",
+		tolower(hex_runes1),
+		".png"
+	)
+)
+
+data <- unnest(chat, emoji) %>%
+	count(author, emoji, sort = TRUE) %>%
+	group_by(author) %>%
+	top_n(n = 15, n) %>%
+	left_join(emoji_data, by = "emoji")
+
+
+ggplot(data, aes(x = reorder(emoji, n),
+					  y = n)) +
+	geom_col(fill = "gray",
+				color = "black",
+				show.legend = FALSE) +
+	# geom_text(aes(x = reorder(emoji, n), y = n, label = n), vjust = 0) +
+	ylab("") +
+	xlab("") +
+	coord_flip() +
+	geom_image(aes(y = n + 20, image = emoji_url)) +
+	facet_wrap(~ author, ncol = 2, scales = "free_y") +
+	ggtitle("Most often used emojis") +
+	theme(
+		axis.text.y = element_blank(),
+		axis.ticks.y = element_blank(),
+		plot.title = element_text(hjust = 0.5),
+		panel.border = element_blank()
+	)
+
+
+# data <- chat %>%
+# 	unnest(emoji) %>%
+# 	count(author, emoji, sort = TRUE) %>%
+# 	group_by(author) %>%
+# 	top_n(n = 6, n)
+# 
+# barplot(data[data$author == "Dereck",])
+```
+
+### Emoji outliers
+
+In order to avoid emoji outliers, or those that were repeatedly copy pasted. I will only take into consideration the messages which contain only one emoji per message. These would seem to be the most meaningful. I do know that we sometimes use a combination of emojis together like for example "❤️❣️" taken to be meant as a heart with an exclamation mark heart; these cases will be ignored for now.
+
+```{r subset-emojis-one, fig.width=15, fig.height=10}
+data <- unnest(chat[nchar(chat$emoji) == 1,], emoji) %>%
+	count(author, emoji, sort = TRUE) %>%
+	group_by(author) %>%
+	top_n(n = 15, n) %>%
+	left_join(emoji_data, by = "emoji")
+
+ggplot(data, aes(x = reorder(emoji, n),
+					  y = n)) +
+	geom_col(fill = "gray",
+				color = "black",
+				show.legend = FALSE) +
+	# geom_text(aes(x = reorder(emoji, n), y = n, label = n), vjust = 0) +
+	ylab("") +
+	xlab("") +
+	coord_flip() +
+	geom_image(aes(y = n + 20, image = emoji_url)) +
+	facet_wrap(~ author, ncol = 2, scales = "free_y") +
+	ggtitle("Most often used emojis") +
+	theme(
+		axis.text.y = element_blank(),
+		axis.ticks.y = element_blank(),
+		plot.title = element_text(hjust = 0.5),
+		panel.border = element_blank()
+	)
+```
+
+## Vocabulary overlap (Venn)
+
+In the following chunk I split up the messages into individual words, these are set inside a list one per author.
+
+```{r split-words}
+data <- list()
+for(i in 1:length(authors)) {
+	data[[i]] <- chat[chat$author == authors[i],] %>% 
+		unnest_tokens(input = text, output = word) %>% 
+		dplyr::select(author, word) %>% 
+		pull(word) %>% 
+		table() %>% 
+		sort(decreasing = TRUE)
+}
+
+names(data) <- authors
+```
+
+This Venn diagram shows the overlap of vocabulary used by authors. Of the total 8186 words 3644 overlap in both our vocabularies. These must be stop words, common English words such as: the, this, it, he, she, and so on.
+
+$$
+	3644/8186 = 44.5\%
+$$
+That is a 44.5% overlap.
+
+```{r venn-words, fig.width=5.5, fig.height=5.5}
+library("mgsub")
+words <- names(unlist(data)) %>% mgsub(pattern = paste0(authors, "."), replacement = c("", ""))
+
+table <- list()
+for(i in 1:length(data)) {
+	table[[i]] <- (words %in% names(data[[i]]))
+}
+
+names(table) <- names(data)
+
+table <- as.data.frame(table)
+
+library("venn")
+
+par(mar = c(0, 0, 0, 0))
+venn(
+	table,
+	ilabels = TRUE,
+	ellipse = FALSE,
+	zcolor = "style",
+	borders = TRUE,
+	box = FALSE,
+	ilcs = 1,
+	par = FALSE
+)
+title(
+  main = "Vocabulary overlap",
+  line = -4
+)
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Favourite words
+
+Here I show most commonly used words for both of us, these do not exclude stop words as mentioned before. As such we can clearly see that the most commonly used words are indeed those common stop words for both of us: I, you, to, etc. These will be excluded in upcoming sections to have a more meaningful result.
+
+```{r favourite-words, fig.width=10, fig.height=10}
+par(mar = c(5.1, 6.5, 2.1, 1), mfrow = c(floor(sqrt(length(data))), ceiling(sqrt(length(data)))))
+for(i in 1:length(data)) {
+	bp <- barplot(sort(data[[i]][1:20]),
+					  sub = names(data)[i],
+					  xlim = c(0, max(data[[i]]) * 1.25),
+					  horiz = TRUE,
+					  las = 1,
+					  cex.names = 1)
+	text(x = sort(data[[i]][1:20]), y = bp, labels = sort(data[[i]][1:20]), pos = 4, col = "red")
+}
+title(main = "Most often used words (unfiltered)",
+		outer = TRUE,
+		line = -1)
+par(mar = c(5.1, 4.1, 2.1, 2.1), mfrow = c(1, 1))
+```
+
+## Most frequently used words (stop words filtered)
+
+Here I filter out stop words. After doing this a first time I noticed that some other kinds of "garbage" words came up not seen previously, these have to do with the chat data or links sent etc. I will exclude these as well.
+
+I noticed I say the word "love" much more often, do I love her more...? Hmmm...! I noticed that she tended to use the word "home" a lot more than I. This makes sense as she's always telling me when she's home, and also asking me when I will be home or if I am. It seems it's important to Liza where I am; maybe we love each other the same then?
+
+```{r stop-words, fig.width=10, fig.height=10}
+to_remove <- c(stopwords("en"), "media", "attached", "2020", "photo", "jpg", "02", "i'm", "03", "omitted", "image", "vm.tiktok", "d0", "d1", "0", "53", "ttl", "ms", "216.58.213.142", "80", "www.derecksnotes", "www.derecksnotes.com", "icmp_seq")
+
+pdata <- list()
+for(i in 1:length(data)) {
+	pdata[[i]] <- sort(data[[i]][!names(data[[i]]) %in% to_remove][1:20], decreasing = TRUE) %>% sort()
+}
+
+par(mar = c(5.1, 7, 2.1, 1), mfrow = c(floor(sqrt(length(data))), ceiling(sqrt(length(data)))))
+for(i in 1:length(data)) {
+	bp <- barplot(pdata[[i]],
+					  xlim = c(0, max(pdata[[i]])*1.25),
+					  horiz = TRUE,
+					  las = 1,
+					  sub = authors[i])
+	text(x = pdata[[i]], y = bp, pos = 4, labels = pdata[[i]], col = "red")
+}
+title(main = "Most often used words (stop words filtered)",
+		outer = TRUE,
+		line = -1)
+par(mar = c(5.1, 4.1, 2.1, 2.1), mfrow = c(1, 1))
+```
+
+## Favourite words frequency (term frequency–inverse document frequency)
+
+Here, I find words that are common within the messages of one author but uncommon in the rest of the messages as a whole. This is based on a usage frequency and these words are *not* exclusive to said author.
+
+```{r favourite-frequencies}
+data <- unnest_tokens(chat, input = text, output = word) %>%
+	select(word, author) %>%
+	filter(!word %in% to_remove) %>%
+	mutate(word = gsub(".com", "", word)) %>%
+	mutate(word = gsub("^gag", "9gag", word)) %>%
+	mutate(word = gsub("^vm.tiktok", "tiktok", word)) %>%
+	mutate(word = gsub("^icmp_seq.*", "", word)) %>%
+	count(author, word, sort = TRUE) %>%
+	bind_tf_idf(term = word, document = author, n = n) %>%
+	filter(n > 10) %>%
+	group_by(author) # %>%
+	# top_n(n = 30, tf_idf)
+
+data <- as.data.frame(data) %>% .[order(.[,6], decreasing = TRUE),]
+data <- data[data[,6] > 0,] %>% na.omit()
+
+pdata <- list()
+for(i in 1:length(authors)) {
+	pdata[[i]] <- data[data$author == authors[i],]
+}
+names(pdata) <- authors
+
+pdata <- lapply(pdata, data.frame)
+pdata <- lapply(pdata, function(x) {
+	x[order(x[,3], decreasing = FALSE),]
+})
+```
+
+
+```{r plot-favourite-frequencies, fig.width=15, fig.height=15}
+par(mar = c(5.1, 10, 2.1, 0), mfrow = c(floor(sqrt(length(pdata))), ceiling(sqrt(length(pdata)))))
+for(i in 1:length(pdata)) {
+	bp <- barplot(height = pdata[[i]][,3],
+					  xlim = c(0, max(pdata[[i]][,3])*1.1),
+					  names.arg = pdata[[i]][,2],
+					  horiz = TRUE,
+					  las = 1,
+					  sub = glue::glue("{authors[i]}: {nrow(pdata[[i]])} words"),
+					  cex.names = 1.5)
+	text(x = pdata[[i]][,3], y = bp, pos = 4, labels = pdata[[i]][,3], col = "red", cex = 1.25)
+}
+title(main = "Term frequency–inverse document frequency\n (words the other author does NOT COMMONLY use)",
+		outer = TRUE,
+		line = -3,
+		cex.main = 1.5)
+par(mar = c(5.1, 4.1, 2.1, 2.1), mfrow = c(1, 1))
+```
+
+## Unique words per author
+
+After having filtered and worked the data now I feel comfortable to check the lexical diversity per author. The data was filtered for garbage, and stop words.
+
+Here I get a rather logical result, I am a native English speaker and as such my lexical diversity is much higher than Liza’s; about 30% higher. We've been discussing flipping to purely speaking in Russian, I still have a lot to learn but it should be doable with some effort - I wonder what my lexical diversity would be compared to her's in English.
+
+
+```{r lexical-diversity, warning=FALSE, message=FALSE, fig.width=7, fig.height=4}
+data <- unnest_tokens(chat, input = text, output = word) %>%
+	filter(!word %in% to_remove) %>%
+	group_by(author) %>%
+	summarise(lex_diversity = n_distinct(word)) %>%
+	arrange(desc(lex_diversity)) %>%
+	as.data.frame()
+
+data <- data[order(data$lex_diversity),]
+
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+bp <- barplot(
+	height = data$lex_diversity,
+	names.arg = data$author,
+	xlim = c(0, max(data$lex_diversity)*1.1),
+	main = "Lexical diversity per author",
+	horiz = TRUE,
+	las = 1
+)
+text(x = data$lex_diversity, y = bp, pos = 4, labels = data$lex_diversity, col = "red")
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Lexical diversity
+
+Here I look at the lexical diversity and thus the *unique* words used by each author.
+
+```{r lexical-div, fig.width=10, fig.height=20}
+originalWords <- function(chat, authors = "") {
+	o_words <- chat %>%
+	unnest_tokens(input = text, output = word) %>%
+	filter(author != authors) %>%
+	count(word, sort = TRUE)
+	return(o_words)
+}
+
+o_words <- list()
+for (i in 1:length(authors)) {
+	o_words[[i]] <- originalWords(chat, authors[i])	
+}
+
+names(o_words) <- authors
+
+uniqueWordsDf <- function(df, o_words, authors = "") {
+	df <- unnest_tokens(df, input = text, output = word) %>%
+	filter(author == authors) %>%
+	filter(!word %in% to_remove) %>%
+	count(word, sort = TRUE) %>%
+	filter(!word %in% o_words$word) %>% # only select words nobody else uses
+	# top_n(n = 30, n) %>%
+	as.data.frame()
+	return(df)
+}
+
+pdata <- list()
+for (i in 1:length(authors)) {
+	pdata[[i]] <- uniqueWordsDf(chat, o_words[[i]], authors[i])
+}
+
+names(pdata) <- authors
+
+pdata <- lapply(pdata, function(x) {
+	x[order(x[,2], decreasing = FALSE),]
+})
+
+pdata <- lapply(pdata, tail, 50)
+```
+
+
+```{r plot-lexical-div, fig.width=13, fig.height=17.5}
+par(mar = c(5.1, 10, 2.1, 1), mfrow = c(floor(sqrt(length(pdata))), ceiling(sqrt(length(pdata)))))
+for(i in 1:length(pdata)) {
+	bp <- barplot(height = pdata[[i]][,2],
+					  xlim = c(0, max(pdata[[i]][,2])*1.125),
+					  names.arg = pdata[[i]][,1],
+					  horiz = TRUE,
+					  las = 1,
+					  sub = authors[i],
+					  cex.names = 1.25)
+					  # sub = glue::glue("{authors[i]}: {nrow(pdata[[i]])} words"))
+	text(x = pdata[[i]][,2], y = bp, pos = 4, labels = pdata[[i]][,2], col = "red", cex = 1.25)
+}
+title(main = "Unique word frequency per author",
+		outer = TRUE,
+		line = -2,
+		cex.main = 1.5)
+par(mar = c(5.1, 4.1, 2.1, 2.1), mfrow = c(1, 1))
+```
+
+# Word cloud
+
+In this next section I will make a simple word cloud from our chat data, just a nice visual of all the words we tend to use. Filtering for stop words and other undesirables of course.
+
+Here I convert the chat data to a pure text messages object. Let's start with a single word cloud for the chat as a whole. Then two separate word clouds for Liza and myself.
+
+## Clean corpus/frequency functions
+
+```{r func-clean-corpus}
+cleanCorpus <- function(chat, wordvec = "") {
+	data <- as.data.frame(chat)
+	data <- iconv(data$text, "latin1", "ASCII", sub = "")
+	
+	cloud <- Corpus(VectorSource(data))
+
+	toSpace <- content_transformer(function (x , pattern) {
+		gsub(pattern, " ", x)
+	})
+	
+	cloud <- tm_map(cloud, toSpace, "/")
+	cloud <- tm_map(cloud, toSpace, "@")
+	cloud <- tm_map(cloud, toSpace, "\\|")
+	
+	# Convert the text to lower case
+	cloud <- tm_map(cloud, content_transformer(tolower))
+	# Remove numbers
+	cloud <- tm_map(cloud, removeNumbers)
+	# Remove english common stopwords
+	cloud <- tm_map(cloud, removeWords, stopwords("english"))
+	
+	# Remove your own stop word
+	# specify your stopwords as a character vector
+	wordvec <- wordvec
+	cloud <- tm_map(cloud, removeWords, wordvec)
+	
+	# Remove punctuations
+	cloud <- tm_map(cloud, removePunctuation)
+	
+	# Eliminate extra white spaces
+	cloud <- tm_map(cloud, stripWhitespace)
+	
+	# Text stemming
+	# docs <- tm_map(docs, stemDocument)
+	
+	return(cloud)
+}
+```
+
+```{r func-word-freq}
+wordFreq <- function(dtm) {
+	m <- as.matrix(dtm)
+	v <- sort(rowSums(m), decreasing = TRUE)
+	df <- data.frame(word = names(v), freq = v)
+	return(df)
+}
+```
+
+```{r init-corpus, message=FALSE, warning=FALSE}
+wordvec <- c(
+	"image",
+	"ommitted",
+	"omitted",
+	"http",
+	"https",
+	"'m",
+	"'s",
+	"wwwderecksnotescom",
+	"wwwyoutubecom"
+)
+```
+
+## Whole chat wordcloud
+
+Here I initialise the frequency object and then plot the wordcloud
+
+```{r word-freq, warning=FALSE, message=FALSE}
+cloud <- cleanCorpus(chat, wordvec)
+dtm <- TermDocumentMatrix(cloud)
+df <- wordFreq(dtm)
+
+datatable(df, rownames = FALSE) # , width = 400
+```
+
+```{r whole-chat-cloud, fig.width=5, fig.height=5}
+par(mar = c(1,1,1,1))
+wordcloud(
+	words = df$word,
+	freq = df$freq,
+	min.freq = 1,
+	max.words = 250,
+	random.order = FALSE,
+	rot.per = 0.35,
+	colors = brewer.pal(8, "Set1")
+)
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+title("Whole chat wordcloud", line = 3)
+```
+
+## Individual wordclouds
+### Dereck
+
+```{r dereck-word-freq, warning=FALSE, message=FALSE}
+cloud <- cleanCorpus(chat[chat$author == "Dereck", ], wordvec)
+dtm <- TermDocumentMatrix(cloud)
+df <- wordFreq(dtm)
+
+datatable(df, rownames = FALSE) # , width = 400
+```
+
+```{r dereck-chat-cloud, fig.width=5, fig.height=5}
+par(mar = c(1,1,1,1))
+wordcloud(
+	words = df$word,
+	freq = df$freq,
+	min.freq = 1,
+	max.words = 250,
+	random.order = FALSE,
+	rot.per = 0.35,
+	colors = brewer.pal(8, "Set1")
+)
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+title("Dereck's wordcloud", line = 3)
+```
+
+### Liza
+
+```{r liza-word-freq, warning=FALSE, message=FALSE}
+cloud <- cleanCorpus(chat[chat$author == "Liza", ], wordvec)
+dtm <- TermDocumentMatrix(cloud)
+df <- wordFreq(dtm)
+
+datatable(df, rownames = FALSE) # , width = 400
+```
+
+```{r liza-chat-cloud, fig.width=5, fig.height=5}
+par(mar = c(1,1,1,1))
+wordcloud(
+	words = df$word,
+	freq = df$freq,
+	min.freq = 1,
+	max.words = 250,
+	random.order = FALSE,
+	rot.per = 0.35,
+	colors = brewer.pal(8, "Set1")
+)
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+title("Liza's wordcloud", line = 3)
+```
+
+# Session information
+
+```{r sesssion-info}
+sessionInfo()
+```
+

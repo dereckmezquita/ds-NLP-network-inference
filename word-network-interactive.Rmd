@@ -1,0 +1,94 @@
+---
+title: "Interactive word-network"
+author: "Dereck de Mézquita"
+date: "14/09/2020"
+knit: (function(inputFile, encoding) { 
+      rmarkdown::render(inputFile,
+                        encoding=encoding, 
+                        output_file=file.path(dirname(inputFile), "reports", "word-network-interactive.html")) })
+output: 
+  html_document: 
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+<style type="text/css">
+.main-container {
+  max-width: 60%;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Description
+
+This document is a stand alone interactive visualisation of the same base network shown in the `word-network-analysis.html` report.
+
+## Project structure
+
+The goal of this project is to analyse chat data with my girlfriend; apply statistical methods, graph theory, and other data science techniques.
+
+Please note that this project is presented in knitted interactive `.html` reports, you can obtain these by downloading them from this github repo at the directory `./reports` *or* you can visit them hosted on my website at: https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/
+
+This project is broken up into three big sub-projects. The project structure is as follows (hosted reports links):
+
+- Text mining, statistical, and exploratory analysis: [derecksnotes.com: text-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/text-analysis.html)
+- Word association network inference: [derecksnotes.com: word-network-inference.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-inference.html)
+- Word association/network topological analysis and visualisation: [derecksnotes.com: word-network-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-analysis.html)
+    - **Bonus -** interactive visualisation of network: [derecksnotes.com: word-network-interactive.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-interactive.html)
+
+# Libraries
+
+```{r libraries, message=FALSE, warning=FALSE}
+library("igraph")
+library("networkD3")
+```
+
+# Load data
+
+```{r load-data, warning=FALSE, message=FALSE}
+net <- readRDS("./outputs/networks.rds")$seventy_five
+
+# dim(net$dec)
+# net <- graph_from_data_frame(net, directed = TRUE)
+# net <- graph_from_data_frame(net$data[, 1:2], directed = TRUE)
+```
+
+# Interactive network
+
+```{r interactive-network, out.width="100%", out.height="70vh", fig.align='center'}
+ndf <- get.data.frame(net)
+
+# Function parameters
+	# Data,
+	# Source = 1,
+	# Target = 2,
+	# height = NULL,
+	# width = NULL,
+	# linkDistance = 50,
+	# charge = -30,
+	# fontSize = 7,
+	# fontFamily = "serif",
+	# linkColour = "#666",
+	# nodeColour = "#3182bd",
+	# opacity = 0.6,
+	# zoom = F
+
+# Plot
+simpleNetwork(ndf, charge = -30, fontSize = 15, fontFamily = "sans-serif", nodeColour = "#1ebd30", opacity = 0.65, zoom = TRUE)
+```
+
+# Session information
+
+```{r sesssion-info}
+sessionInfo()
+```
+

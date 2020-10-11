@@ -1,0 +1,357 @@
+---
+title: "Word network inference"
+author: "Dereck de Mézquita"
+date: "14/09/2020"
+knit: (function(inputFile, encoding) { 
+      rmarkdown::render(inputFile,
+                        encoding=encoding, 
+                        output_file=file.path(dirname(inputFile), "reports", "word-network-inference.html")) })
+output: 
+  html_document: 
+    fig_caption: yes
+    keep_md: yes
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center")
+```
+
+# Description
+
+This document is meant as a script for the inference of word networks. These networks are composed of words from my chat with Liza, the nodes are individual words and the vertices are the associations between those words. A correlation limit is set in order to inferr these asssociations; as explained more in detail in the following sections. These networks are directed.
+
+These steps to word network inference are as follows:
+
+- Load and clean the data.
+- Subset the data for network inference.
+- Use a custom network inference function based on the `findAssocs()` function of the "tm" package.
+	- Find word associations.
+	- Inferr networks at different correlation limits or word list sizes for fine tuning.
+	- Subset objects into a directed adjacency list.
+- Test plot the networks object to select a viable network.
+
+## Project structure
+
+The goal of this project is to analyse chat data with my girlfriend; apply statistical methods, graph theory, and other data science techniques.
+
+Please note that this project is presented in knitted interactive `.html` reports, you can obtain these by downloading them from this github repo at the directory `./reports` *or* you can visit them hosted on my website at: https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/
+
+This project is broken up into three big sub-projects. The project structure is as follows (hosted reports links):
+
+- Text mining, statistical, and exploratory analysis: [derecksnotes.com: text-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/text-analysis.html)
+- Word association network inference: [derecksnotes.com: word-network-inference.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-inference.html)
+- Word association/network topological analysis and visualisation: [derecksnotes.com: word-network-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-analysis.html)
+    - **Bonus -** interactive visualisation of network: [derecksnotes.com: word-network-interactive.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-interactive.html)
+
+# Libraries
+
+```{r libraries, message=FALSE, warning=FALSE}
+library("rwhatsapp")
+library("tidyverse")
+library("DT")
+
+library("tm")
+library("stopwords")
+library("SnowballC")
+
+library("wordcloud")
+library("RColorBrewer")
+
+library("english")
+library("igraph")
+```
+
+# Load data
+
+```{r load-data}
+# Date format: [2/1/20, 12:01:05]
+# date_format <- "M/d/yy', HH:mm:ss"
+date_format <- "M/d/yy, HH:mm:ss"
+
+if(!file.exists("./outputs/chat.rds")) {
+	message("Load does not exist. Loading raw and saving object.")
+	chat_init <- rwa_read("./data/chat.txt", tz = "Europe/Paris", verbose = TRUE, format = date_format) %>% filter(!is.na(author))
+	saveRDS(chat_init, "./outputs/chat.rds")
+} else {
+	message("Load exists, loading previous RDS.")
+	chat_init <- readRDS("./outputs/chat.rds")
+}
+
+chat_init <- as.data.frame(chat_init)
+data <- iconv(chat_init$text, "latin1", "ASCII", sub = "")
+```
+
+
+# Word cloud
+
+I create a quick wordcloud to assess the quality of the data; this is a quick way to visualise what I am doing before going onto the network inference portion which requires a lot more computational power and time!
+
+## Corpus create
+```{r init-corpus}
+cloud <- Corpus(VectorSource(data)) # data | cloud
+
+# inspect(cloud)
+```
+
+## Transform and clean text
+
+```{r transform-clean, warning=FALSE, message=FALSE}
+toSpace <- content_transformer(function (x , pattern) {
+	gsub(pattern, " ", x)
+})
+cloud <- tm_map(cloud, toSpace, "/")
+cloud <- tm_map(cloud, toSpace, "@")
+cloud <- tm_map(cloud, toSpace, "\\|")
+```
+
+```{r convert-text, warning=FALSE, message=FALSE}
+# Convert the text to lower case
+cloud <- tm_map(cloud, content_transformer(tolower))
+# Remove numbers
+cloud <- tm_map(cloud, removeNumbers)
+# Remove english common stopwords
+cloud <- tm_map(cloud, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+
+to_remove <- c(stopwords("en"), "media", "attached", "2020", "photo", "jpg", "02", "i'm", "03", "omitted", "image", "vm.tiktok", "d0", "d1", "0", "53", "ttl", "ms", "216.58.213.142", "80", "www.derecksnotes", "www.derecksnotes.com", "icmp_seq")
+
+wordvec <- c(to_remove,
+				 "image",
+				 "ommitted",
+				 "omitted",
+				 "http",
+				 "https",
+				 "'m",
+				 "'s",
+				 "wwwderecksnotescom",
+				 "wwwyoutubecom")
+
+cloud <- tm_map(cloud, removeWords, wordvec)
+# Remove punctuations
+cloud <- tm_map(cloud, removePunctuation)
+# Eliminate extra white spaces
+cloud <- tm_map(cloud, stripWhitespace)
+# Text stemming
+# docs <- tm_map(docs, stemDocument)
+```
+
+## Word frequencies
+
+```{r word-freq}
+dtm <- TermDocumentMatrix(cloud)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m), decreasing = TRUE)
+data <- data.frame(word = names(v), freq = v)
+
+datatable(data, rownames = FALSE)
+```
+
+## Wordcloud plot
+
+```{r plot-cloud, fig.width=5, fig.height=5}
+par(mar = c(1,1,1,1))
+wordcloud(
+	words = data$word,
+	freq = data$freq,
+	min.freq = 1,
+	max.words = 300,
+	random.order = FALSE,
+	rot.per = 0.35,
+	colors = brewer.pal(8, "Set1")
+)
+title("Test wordcloud")
+par(mar = c(5.1, 4.1, 4.1, 2.1))
+```
+
+# Network creation
+## Term associations data
+
+```{r subset-words}
+net_init <- head(data, 100)
+```
+
+A quick test plot to view the distribution of the frequencies. The goal is to get only the most important words so as to reduce computational power requirements. This will also increase the quality of the network and exclude infrequently used terms.
+
+```{r test-plot-freq, fig.width=10, fig.height=10}
+par(mar = c(5.1, 8, 2.1, 2.1))
+barplot(height = net_init$freq,
+		  names.arg = net_init$word,
+		  horiz = TRUE,
+		  las = 1)
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Custom network inference function
+
+This is a custom function based on the `findAssocs()` function of the "tm" package (text-mining). This function from "tm" allows you to calculate the correlation of every given word in a document term matrix (DTM). Scores go from 0 to 1, 1 meaning that two words only appear together in the document. Correlation values can be low because of word diversity in a document. 
+
+I used this function in order to get the word associations in a document. Then I converted this object to a dataframe and ran over every word in the object along with it's associations and pushed them into a new object; an `adjacency object`. The origin is set to the word, then the target is all of the combinations of the associated words. Errors are caught as sometimes in the object there are empty targets, as the word in question did not have any associated partners.
+
+Finally all rows are bound and a new dataframe type object is created. This is the `adjacency list` object describing the network; *note these networks are directed*.
+
+### Fine tuning the models
+
+In order to fine tune the models and obtain a network which is usable, I will first run the infer networks function by varying the two main parameters independently: correlation limit and word list size. Then after qualitatively selecting a range of correlation limits and word list sizes, I select the best model.
+
+```{r func-inference-word-net}
+inferenceWordNet <- function(dtm, data, corlim = 0.1) {
+	assoc <- list()
+	for (i in 1:dim(data)[1]) {
+		message("Run: ", i, " of ", dim(data)[1])
+		assoc[[i]] <- findAssocs(dtm, terms = data$word[i], corlimit = corlim)
+	}
+
+	df <- list()
+	for(i in 1:length(assoc)) {
+		df[[i]] <- as.data.frame(assoc[[i]])
+	}
+	res <- list()
+	for (i in 1:length(df)) {
+		res[[i]] <- df[[i]]
+		tryCatch({
+			res[[i]]$origin <- colnames(df[[i]])
+			res[[i]]$target <- rownames(df[[i]])
+			res[[i]][,colnames(df[[i]])] <- NULL
+		}, error = function(e) {
+			message("Error: ", e, " index: ", i)
+		})
+	}
+	net <- as.data.frame(bind_rows(res, .id = NULL))
+	net <- net[,1:2]
+	return(net)
+}
+```
+
+## Networks plotter function
+
+This plotter function is used to assess the two different parameters on the networks; word list size, and correlation limit.
+
+```{r func-plotter, warning=FALSE, message=FALSE}
+plotter <- function(net, main = "", main_cex = 1) {
+	plot.igraph(
+		net,
+		edge.arrow.mode = net$direction,
+		edge.width = 0.4,
+		edge.arrow.width = 0.3,
+		edge.arrow.size = 0.3,
+		vertex.size = 1,
+		vertex.size2 = 1,
+		# vertex.label.cex = 1,
+		# vertex.label.dist = 0.2,
+		vertex.label = NA, # NA = no labels
+		layout = layout_components,
+		# asp = 1,
+		# controls aspect ratio
+		margin = 0
+	)
+	title(main = main, cex.main = main_cex)
+}
+```
+
+# Infer networks; vary correlation limit (word list size: 50)
+
+After having reviewed the above barplot for the word list, I qualitatively find that around 50 words is a good size to attempt a first inference.
+
+```{r subset-top-50}
+net_init <- head(data, 50)
+```
+
+Here I run over a number of different correlation thresholds in order to obtain a usuable network. I then plot all networks at once and select only the one I deem visually viable. Tthe correlation limit for network inference. This allows us to fine tune the size of the network and the "tightness" as the higher the correlation limit threshold the higher the association frequency required in order to make a connection between two nodes in the network.
+
+*Note that these next chunks takes a while to run due to a number of factors including: the size of the initial object, the size of the `dtm` and the number of times networks are inferred - at different correlation limits.*
+
+```{r run-inference-word-nets-vary-correlation, message=FALSE, results="hide"}
+limits <- c(0.005, 0.007, 0.010, 0.030, 0.050, 0.075, 0.100, 0.300, 0.450, 0.475, 0.480, 0.481, 0.482, 0.483, 0.484, 0.485, 0.486, 0.487, 0.489, 0.490, 0.491)
+
+if(!file.exists("./outputs/nets_vcorrs.Rds")) {
+	message("Previous network inference object (varying correlation limit) does not exist; running network inference and saving object.")
+	
+	nets_vcorrs <- list()
+	for (i in 1:length(limits)) {
+		nets_vcorrs[[i]] <- inferenceWordNet(dtm, net_init, limits[i])
+	}
+	names(nets_vcorrs) <- as.character(limits)
+
+	saveRDS(nets_vcorrs, "./outputs/nets_vcorrs.Rds")
+} else {
+	message("Previous network inference object exists; loading object.")
+	nets_vcorrs <- readRDS("./outputs/nets_vcorrs.Rds")
+}
+```
+
+## Test plots
+
+```{r test-plot-varying-corr-limit, message=FALSE, warning=FALSE, fig.width=27.5, fig.height=27.5}
+nets <- lapply(nets_vcorrs, graph_from_data_frame, directed = TRUE)
+
+par(mfrow = c(4, 4), mar = c(1, 1, 5, 1))
+for (i in 1:length(nets)) {
+	message("Plotting ", i, " of ", length(nets))
+	plotter(nets[[i]], main = names(nets)[i], main_cex = 3.5)
+}
+# lapply(nets, plotter)
+par(mfrow = c(1, 1), mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Infer networks; vary word list sizes (correlation limit 0.075)
+
+Here a different approach is used to fine tuning the network, instead of varying the correlation limit, set at a fixed 0.450, I vary the size of the word list to find the associations from! This varies the size of the network and does not touch the association frequency requirment.
+
+```{r run-inference-word-nets-vary-nwords, message=FALSE, warning=FALSE}
+if(!file.exists("./outputs/nets_vwords.Rds")) {
+	message("Previous network inference object (varying word list size) does not exist; running network inference and saving object.")
+	size <- 24
+	nets_vwords <- list()
+	nms <- list()
+	
+	system.time(
+			for (i in 0:85) {
+			size <- size + 1
+			words <- head(data, size)
+			
+			nets_vwords[[i]] <- inferenceWordNet(dtm, words, 0.075)
+			nms[[i]] <- as.english(size) %>% as.character() %>% strsplit(" |-") %>% unlist() %>% paste0(collapse = "_")
+		}
+	)
+	names(nets_vwords) <- nms
+
+	saveRDS(nets_vwords, "./outputs/nets_vwords.Rds")
+} else {
+	message("Previous network inference object exists; loading object.")
+	nets_vwords <- readRDS("./outputs/nets_vwords.Rds")
+}
+```
+
+## Test plots
+
+```{r test-plot-varying-word-list-size, message=FALSE, warning=FALSE, fig.width=27.5, fig.height=27.5}
+nets <- lapply(nets_vwords, graph_from_data_frame, directed = TRUE)
+
+par(mfrow = c(4, 4), mar = c(1, 1, 5, 1))
+for (i in 1:length(nets)) {
+	# message("Plotting ", i, " of ", length(nets))
+	plotter(nets[[i]], main = names(nets)[i], main_cex = 3.5)
+}
+# lapply(nets, plotter)
+par(mfrow = c(1, 1), mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Save networks object
+
+```{r save-net}
+# write.csv(net_init, "./outputs/network-adjacency-list.csv", row.names = FALSE)
+saveRDS(nets, "./outputs/networks.rds")
+```
+
+# Session information
+
+```{r sesssion-info}
+sessionInfo()
+```
+

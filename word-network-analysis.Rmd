@@ -1,0 +1,782 @@
+---
+title: "Word network analysis"
+author: "Dereck de Mézquita"
+date: "17/09/2020"
+knit: (function(inputFile, encoding) { 
+      rmarkdown::render(inputFile,
+                        encoding=encoding, 
+                        output_file=file.path(dirname(inputFile), "reports", "word-network-analysis.html")) })
+output: 
+  html_document: 
+    fig_caption: yes
+    keep_md: yes
+    number_sections: yes
+    toc: yes
+    toc_float: yes
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align = "center", fig.height = 15, fig.width = 15)
+```
+
+```{js}
+alert("This report contains multiple plots in the same area, click the tabs above the plots to view.")
+``` 
+
+# Description
+
+Here you'll find a full analysis on the word networks inferenced by use of the previous script `word-network-inference.Rmd` and chat data. This document covers in depth topological analysis and graph theory to produce a *report*: `text-analysis.Rmd/html`. Some of the results found in this report are:
+
+- Word-net visualisation.
+
+Moreover, if you're interested you can find a fully interactive visualisation of the word-net here: `word-network-interactive.Rmd/html` - [word-network-interactive.html](./word-network-interactive.html).
+
+Analysis done here is inspired by:
+
+- [Network Analysis and Visualization with R and igraph](https://kateto.net/netscix2016.html) by Katherine Ognyanova.
+- Statistical Analysis of Network Data with R by Eric D. Kolaczyk and Gábor Csárdi 2014.
+- igraph R package's documentation.
+
+*Csárdi is the primary maintainer of the R igraph package.*
+
+## Project structure
+
+The goal of this project is to analyse chat data with my girlfriend; apply statistical methods, graph theory, and other data science techniques.
+
+Please note that this project is presented in knitted interactive `.html` reports, you can obtain these by downloading them from this github repo at the directory `./reports` *or* you can visit them hosted on my website at: https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/
+
+This project is broken up into three big sub-projects. The project structure is as follows (hosted reports links):
+
+- Text mining, statistical, and exploratory analysis: [derecksnotes.com: text-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/text-analysis.html)
+- Word association network inference: [derecksnotes.com: word-network-inference.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-inference.html)
+- Word association/network topological analysis and visualisation: [derecksnotes.com: word-network-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-analysis.html)
+    - **Bonus -** interactive visualisation of network: [derecksnotes.com: word-network-interactive.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-interactive.html)
+
+# Libraries
+```{r libraries, message=FALSE, warning=FALSE}
+# library("octavius")
+library("igraph")
+library("tidyverse")
+```
+
+# Load data
+
+In the previous script, [word-network-inference.Rmd/html](./word-network-inference.html) I found that the best network I could obtain was with the following parameters: correlation limit at 0.075, and a word list size of 75. This one was obtained by the custom built `inferenceWordNet(dtm, nets, 0.075)` function. See the html output as linked above for a detailed description of how this algorithm works and the `.Rmd` for the raw code [word-network-inference.Rmd](./word-network-inference.Rmd).
+
+Note that our network is a directed graph.
+
+```{r load-data, warning=FALSE, message=FALSE}
+net_init <- readRDS("./outputs/networks.rds"); names(net_init)
+net <- net_init$seventy_five
+```
+
+# Graph parameters
+
+These are all the possible arguments possible for plotting and igraph network.
+
+```{r graph-parameters}
+# NODES
+# vertex.color Node color
+# vertex.frame.color Node border color
+# vertex.shape One of “none”, “circle”, “square”, “csquare”, “rectangle” “crectangle”, “vrectangle”, “pie”, “raster”, or “sphere”
+
+vertex.size <- 2 # Size of the node (default is 15)
+# vertex.size2	 The second size of the node (e.g. for a rectangle)
+# vertex.label	 Character vector used to label the nodes
+# vertex.label.family	 Font family of the label (e.g.“Times”, “Helvetica”)
+# vertex.label.font	 Font: 1 plain, 2 bold, 3, italic, 4 bold italic, 5 symbol
+vertex.label.cex <- 2.5 # Font size (multiplication factor, device-dependent)
+vertex.label.dist <- 0.75 # Distance between the label and the vertex
+vertex.label.degree <- 0 # The position of the label in relation to the vertex, where 0 right, “pi” is left, “pi/2” is below, and “-pi/2” is above
+
+# EDGES
+# edge.color	 Edge color
+# edge.width	 Edge width, defaults to 1
+# edge.arrow.size	 Arrow size, defaults to 1
+# edge.arrow.width	 Arrow width, defaults to 1
+# edge.lty	 Line type, could be 0 or “blank”, 1 or “solid”, 2 or “dashed”, 3 or “dotted”, 4 or “dotdash”, 5 or “longdash”, 6 or “twodash”
+# edge.label	 Character vector used to label edges
+# edge.label.family	 Font family of the label (e.g.“Times”, “Helvetica”)
+# edge.label.font	 Font: 1 plain, 2 bold, 3, italic, 4 bold italic, 5 symbol
+# edge.label.cex	 Font size for edge labels
+# edge.curved	 Edge curvature, range 0-1 (FALSE sets it to 0, TRUE to 0.5)
+# arrow.mode	 Vector specifying whether edges should have arrows, possible values: 0 no arrow, 1 back, 2 forward, 3 both
+
+# OTHER	 
+# margin	 Empty space margins around the plot, vector with length 4
+# frame	 if TRUE, the plot will be framed
+# main	 If set, adds a title to the plot
+# sub	 If set, adds a subtitle to the plot
+# vertex.label = NULL # NA = no labels
+```
+
+# Layout selection
+
+Here let's get all possible layouts from the igraph package and plot our network in all possible layouts.
+
+```{r plot-all-layouts}
+layouts <- grep("^layout_", ls("package:igraph"), value = TRUE)[-1]
+
+# Remove layouts that do not apply to our graph.
+
+layouts <- layouts[!grepl("bipartite|merge|norm|sugiyama|tree", layouts)]
+
+par(mfrow = c(3, 3), mar = c(1, 1, 1, 1))
+for (layout in layouts) {
+  # message(layout)
+  
+  l <- do.call(layout, list(net))
+  # plot(net, edge.arrow.mode = 0, vertex.size = 7, layout = l, main = layout)
+plot(net,
+	  layout = l,
+     main = layout,
+	  vertex.size = vertex.size,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree,
+	  vertex.label = NA,
+     margin = 0)
+}
+par(mfrow = c(1, 1), mar = c(1, 1, 1, 1))
+```
+
+"layout_components" seems convincing enough, I'll use this one from here on out unless otherwise required.
+
+```{r graph-layouts}
+grep("^layout_", ls("package:igraph"), value = TRUE)
+# LAYOUTS
+setLayout <- layout_with_fr
+```
+
+# Plot network
+
+## Network
+
+The arguments are adjusted in the above section. I preferred to have smaller labels and more space so it's more legible. Right click on the image to open in a new window/tab. 
+
+```{r word-network-plot, fig.width=40, fig.height=40}
+plot(net,
+	  layout = setLayout,
+	  vertex.size = vertex.size,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Word-network: Dereck & Liza",
+	   sub = glue::glue("01 February 2020 - 20 September 2020 \n Vertices: {length(V(net))}, Edges: {length(E(net))}"),
+	   cex.main = 4,
+	   cex.sub = 4)
+```
+
+<!-- ## Heatmap -->
+
+<!-- In this heatmap representation I noticed that a large number of nodes have no other connections. I will remove these by taking the rowsum of and removing any rows with a value equal to 0. -->
+
+<!-- ```{r heatmap-plot} -->
+<!-- netm <- get.adjacency(net, sparse = FALSE) -->
+
+<!-- palf <- colorRampPalette(c("gold", "dark orange")) -->
+
+<!-- heatmap(netm, Rowv = NA, Colv = NA, col = palf(100), scale="none", cexRow = 0.75, cexCol = 0.75, margins = c(5,5)) -->
+<!-- ``` -->
+
+<!-- ```{r clean-heatmap} -->
+<!-- rsm <- rowSums(netm) -->
+
+<!-- heatmap(netm[rsm,], Rowv = NA, Colv = NA, col = palf(100), scale="none", cexRow = 0.75, cexCol = 0.75, margins = c(5,5)) -->
+<!-- ``` -->
+
+# Network description/characterisation
+
+In the following sections we will cover all of the major characteristics of a graph. I will give short definitions and mathematical representations of the measurement.
+
+## Density
+
+Density of a graph is defined as the the proportion of the number of edges to the maximal number of edges. 
+
+This can be described as such for a directed network:
+
+$$
+	density = \frac{n(edges)}{n(vertices) \cdot (n(vertices) - 1)}
+$$
+
+```{r graph-density}
+edge_density(net, loops = F) # edge_density(net, loops = F)
+```
+
+## Reciprocity
+
+Reciprocity is a measurement or proportion of mutual connections between vertices in a given network. That is vertices that have two edges connecting said points in both directions - this is counted as one reciprocal connection. A <-> B as shown in the illustration below:
+
+```{r mutual-connection-illustration, fig.width=7, fig.height=7}
+ill <- graph(
+	c("A", "B", "B", "A")
+)
+
+plot(ill,
+	  vertex.size = 30,
+	  vertex.label.cex = 4,
+	  edge.width = 3, # Edge width, defaults to 1
+	  edge.arrow.size = 2, # Arrow size, defaults to 1
+	  edge.arrow.width = 2, # Arrow width, defaults to 1
+	  edge.curved = TRUE,
+	  edge.label = c("A to B", "B to A"),
+	  edge.label.cex = 2)
+
+title(main = "1 reciprocal connection",
+	   cex.main = 2)
+```
+
+"Among other things, reciprocity has been shown to be crucial in order to classify3 and model4 directed networks, understand the effects of network structure on dynamical processes (e.g. diffusion or percolation processes5,6,7), explain patterns of growth in out-of-equilibrium networks (as in the case of the Wikipedia8 or the World Trade Web9,10) and study the onset of higher-order structures such as correlations11,12 and triadic motifs13,14,15,16." - 
+
+
+Here I re-plot our previously shown network, colouring reciprocal connections red, this allows us to affirm that reciprocal connections do indeed exist in our network:
+
+```{r word-net-reciprocal, fig.width=40, fig.height=40}
+pnet <- net
+
+E(pnet)$color <- "grey"
+E(pnet)$color[is.mutual(pnet)] = "red"
+E(pnet)$width <- 1
+E(pnet)$width[is.mutual(pnet)] = 1.75
+
+plot(pnet,
+	  layout = setLayout,
+	  vertex.size = vertex.size,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Reciprocal connections (red) word-net: Dereck & Liza",
+	   sub = glue::glue("Reciprocal connections: {dyad_census(net)$mut}"),
+	   cex.main = 4,
+	   cex.sub = 4)
+```
+
+Reciprocity is calculated in the following way:
+
+$$
+	reciprocity = 2 \cdot \frac{n(mut)}{n(edges)}
+$$
+*Where "mut" means mutual connections.*
+
+```{r graph-reciprocity}
+2 * dyad_census(net)$mut / ecount(net) # reciprocity(net)
+```
+
+## Transivity
+
+<!-- http://pages.stat.wisc.edu/~karlrohe/netsci/MeasuringTrianglesInGraphs.pdf -->
+
+Transitivity is a statistic by which the number of triangles or triplets in a network can be assessed. It is expressed as a probability. That is the probability of randomly selecting a two-star from the graph and that it is a closed triplet.
+
+We define G as a graph composed of a set of edges (E) and vertices (V):
+
+$$
+	\begin{align}
+		G &= (V, E) \\
+		V &= \{1, \dots n\} \\
+		E &= \{(i, j): \ edge \ i \ to \ j\} \\
+	\end{align}	
+$$
+
+$$
+	transitivity(G) = \frac{3 \cdot n(closed \ triplets \in G)}{n(connected \ triples \in G)}
+$$
+
+```{r triplets-connection-illustration, fig.width=10, fig.height=7}
+ill <- read.table(header = FALSE, text = "
+	E A
+	E B
+	E D
+	E C
+	A B
+	A D
+	B C
+	C D") %>% graph_from_data_frame(directed = FALSE)
+
+E(ill)$lty <- c(rep.int(1, 4), rep.int(4, 4))
+
+ill2 <- ill
+E(ill2)$lty <- c(rep.int(1, 5), rep.int(4, 3))
+
+E(ill2)$color <- "grey"
+E(ill2)$color <- c(rep("red", 2), rep("grey", 2), "red", rep("grey", 3))
+
+par(mar = c(2, 2, 2, 2), mfrow = c(1, 2))
+plot(ill,
+	  vertex.size = 25,
+	  vertex.label.cex = 2,
+	  edge.width = 7, # Edge width, defaults to 1
+	  edge.arrow.size = 2, # Arrow size, defaults to 1
+	  edge.arrow.width = 2, # Arrow width, defaults to 1
+	  edge.label.cex = 2,
+	  margin = 0)
+plot(ill2,
+	  vertex.size = 25,
+	  vertex.label.cex = 2,
+	  edge.width = 7, # Edge width, defaults to 1
+	  edge.arrow.size = 2, # Arrow size, defaults to 1
+	  edge.arrow.width = 2, # Arrow width, defaults to 1
+	  edge.label.cex = 2,
+	  margin = 0)
+par(mar = c(5.1, 4.1, 4.1, 2.1), mfrow = c(1, 1))
+
+title(main = "Transitivity in networks",
+		sub = "Dotted lines designate possible triplets \n Red lines triplet group",
+	   cex.main = 2,
+		cex.sub = 2,
+		outer = TRUE,
+		line = -3)
+```
+
+<!-- https://www.sci.unich.it/~francesc/teaching/network/transitivity.html -->
+
+This measurement allows us to get an idea for the existence of tightly connected communities (clusters). A perfectly transitive network would mean that if \(x\) is connected to \(y\) and \(y\) to \(z\) then \(x\) is also connected to \(z\). Perfect transitivity is extremely rare in real networks, it would mean that baisically every node in a network is connected to one another.
+
+Transitivity is a metric commonly used when assessing social networks. As the fact that a person \(y\) knows both \(x\) and \(z\) increases the chances that \(x\) and \(z\) know each other as well. For non-social networks however, transitivity tends to be lower depending on the nature of the relationship between vertices.
+
+```{r perfect-transitivity-illustration, fig.width=10, fig.height=7}
+ill <- read.table(header = FALSE, text = "
+	x y
+	y z
+	z x") %>% graph_from_data_frame(directed = FALSE)
+
+ill2 <- read.table(header = FALSE, text = "
+	x y
+	y z
+	z x
+	z a") %>% graph_from_data_frame(directed = FALSE)
+
+par(mar = c(2, 2, 2, 2), mfrow = c(1, 2))
+plot(ill,
+	  vertex.size = 25,
+	  vertex.label.cex = 2,
+	  edge.width = 7, # Edge width, defaults to 1
+	  edge.arrow.size = 2, # Arrow size, defaults to 1
+	  edge.arrow.width = 2, # Arrow width, defaults to 1
+	  edge.label.cex = 2,
+	  margin = 0)
+title(sub = glue::glue("Transitivity: {transitivity(ill, type=\"global\")}"),
+		cex.sub = 2,
+		# outer = TRUE,
+		line = -3)
+plot(ill2,
+	  vertex.size = 25,
+	  vertex.label.cex = 2,
+	  edge.width = 7, # Edge width, defaults to 1
+	  edge.arrow.size = 2, # Arrow size, defaults to 1
+	  edge.arrow.width = 2, # Arrow width, defaults to 1
+	  edge.label.cex = 2,
+	  margin = 0)
+title(sub = glue::glue("Transitivity: {transitivity(ill2, type=\"global\")}"),
+		cex.sub = 2,
+		# outer = TRUE,
+		line = -3)
+par(mar = c(5.1, 4.1, 4.1, 2.1), mfrow = c(1, 1))
+
+title(main = "Perfect transitivity",
+	   cex.main = 2,
+		outer = TRUE,
+		line = -3)
+```
+
+
+```{r transitivity}
+transitivity(net, type = "global")  # net is treated as an undirected network
+```
+
+I find that the transitivity for this word network is about 0.0268. This is a relatively low value. A randomly generated network (random connections), would have a transitivity of about 0.84. This suggests that there are rules for how connections are made between vertices; this is logical since we are dealing with vertices describing a human language. 
+<!-- https://www.sci.unich.it/~francesc/teaching/network/transitivity.html -->
+
+## Diameter
+
+Geodesic distance is the shortest path possible, least number of connections, between two given vertices. The diameter of a network is determined by the longest geodesic distance possible in that network.
+
+```{r diameter-info}
+diam <- get_diameter(net, directed = TRUE, weights = NA)
+
+furthest <- farthest_vertices(net, directed = TRUE, weights = NA)
+map <- as.numeric(furthest$vertices)
+```
+
+```{r diameter-plot, warning=FALSE, message=FALSE, fig.width=40, fig.height=40}
+vcol <- rep("grey", vcount(net))
+
+vcol[diam] <- "gold"
+
+ecol <- rep("grey", ecount(net))
+ecol[E(net, path = diam)] <- "orange"
+
+ewdt <- rep(1, ecount(net))
+ewdt[E(net, path = diam)] <- 7
+
+# E(net, path = diam) finds edges along a path, here 'diam'
+
+pname <- paste(V(net)$name[map], collapse = ", ")
+pname <- glue::glue("Distant nodes: {pname}, distance: {furthest$distance}")
+
+plot(net,
+	  layout = setLayout,
+	  vertex.size = vertex.size,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree,
+	  vertex.color = vcol,
+	  edge.color = ecol,
+	  edge.width = ewdt,
+	  main = pname)
+```
+
+## Degrees
+
+A simple measure counting the number of direct neighbours has. A directed network has two versions: in-degree, out-degree, the number of incoming links and the out going respectively.
+
+There is such a disparity in the number of degrees from the top nodes to the bottom. 72 to 1. Thus, I show the degrees per node with a log scaled vertex size.
+
+#### Plots {.tabset}
+
+```{r degrees, results="asis", fig.width=40, fig.height=40}
+deg <- igraph::degree(net, mode = "all")
+nme <- paste(names(head(sort(deg, decreasing = TRUE), 7)), head(sort(deg, decreasing = TRUE), 7)) %>% paste(collapse = ", ")
+
+cat("##### ","Degrees per vertex; network", "\n")
+plot(net,
+	  layout = setLayout,
+	  vertex.size = log10(deg) * 5,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Degrees per vertex (log scaled sizes)",
+	   sub = glue::glue("Top vertices 7: {nme}"),
+		outer = TRUE,
+	   cex.main = 4,
+	   cex.sub = 4,
+		line = -5)
+cat("\n\n")
+```
+
+```{r degree-barplot, results="asis", fig.width=7, fig.height=10}
+tdg <- sort(deg)[-length(deg)] %>% tail(20)
+
+cat("##### ","Degrees per vertex; network", "\n")
+bp <- barplot(tdg, las = 1, horiz = TRUE, cex.names = 1, main = "Degress, top 20 nodes")
+text(y = bp, x = tdg, label = tdg, pos = 2, cex = 1, col = "red")
+cat("\n\n")
+```
+
+
+
+```{r degree-distribution, results="asis", fig.width=10, fig.height=10}
+dgdst <- degree_distribution(net, cumulative = TRUE, mode = "all")
+
+cat("##### ","Degree distribution", "\n")
+plot(x = 0:max(deg), y = 1 - dgdst, pch = 19, cex = 1.2, col = "orange", xlab = "Degree", ylab = "Cumulative frequency")
+cat("\n\n")
+```
+
+## Closeness centrality
+
+<!-- https://www.sci.unich.it/~francesc/teaching/network/closeness.html -->
+
+A measurement of the mean distance from a vertice to others. Note, a geodesic path is a shortest path through a network between two vertices. If \(d_{i, j}\) is the length of a geodesic path from \(i\) to \(j\), number of edges, then the mean geodesic distance for vertix \(i\):
+
+$$
+	l_i = \frac{1}{n} \sum_j d_{i, j}
+$$
+
+Vertices with short average geodesic distance from other vertices might have better access or influence on other vertices. In the case of social networks again this could be a person having access to information other people know, or influencing other people. The lower the mean distance a person has to others the more they are influential. 
+
+Closeness centrality is calculated as the inverse of the previous formula; as \(l_i\) returns low values for central nodes and inversely. Thus:
+
+$$
+	C_i = \frac{1}{l_i} = \frac{n}{\sum_j d_{i,j}}
+$$
+
+```{r centrality, fig.height=10, fig.width=10}
+closeness <- closeness(net, vids = V(net), mode = "total", weights = NULL, normalized = FALSE) %>% sort(decreasing = TRUE)
+closeness <- head(closeness, 20) %>% round(6) %>% sort()
+
+par(mar = c(5.1, 7, 2.1, 2.1))
+barplot(closeness, las = 1, horiz = TRUE, cex.names = 1, main = "Closeness for top 20 nodes")
+text(y = bp, x = closeness, label = closeness, pos = 2, cex = 1, col = "red")
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Betweeness
+
+```{r betweeness, fig.height=10, fig.width=10}
+btwns <- betweenness(net, directed = TRUE, weights = NA) %>% sort(decreasing = TRUE)
+btwns <- head(btwns, 20) %>% round(6) %>% sort()
+
+par(mar = c(5.1, 7, 2.1, 2.1))
+barplot(btwns, las = 1, horiz = TRUE, cex.names = 1, main = "Betweeness for top 20 nodes")
+text(y = bp, x = btwns, label = btwns, pos = 2, cex = 1, col = "red")
+par(mar = c(5.1, 4.1, 2.1, 2.1))
+```
+
+## Hubs and authorities
+
+Algorithms originally developed by Jon Kleinberg, these were initially used to study web-pages. Hubs are pages that have catalogs of outgoing links and authorities are targets.
+
+Relative to the chat data here, we can predict that hubs will be words connecting sentences or ideas, and authorities will be words connected to. I predict these two might show significant overlap considering the gramatical structure of the English language.
+
+### Hubs
+#### Plots {.tabset}
+
+```{r net-plot-hubs, results="asis", fig.width=40, fig.height=40}
+cat("##### ","Hubs network", "\n")
+
+hs <- hub_score(net, weights = NA)$vector
+
+plot(net,
+	  layout = setLayout,
+	  vertex.size = hs * 10,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Hubs in network",
+	   sub = "Large number of outgoing connection",
+		outer = TRUE,
+	   cex.main = 4,
+	   cex.sub = 4,
+		line = -5)
+cat("\n\n")
+```
+
+```{r hubs-barplot, results="asis", fig.height=10, fig.width=10}
+cat("##### ","Hubs barplot", "\n")
+par(mar =c (5.1, 7, 2.1, 2.1))
+data <- sort(hs) %>% tail(25)
+bp <- barplot(data, xlim = c(0, max(data) * 1.1), horiz = TRUE, las = 1, cex.names = 1, main = "Top 25 hubs")
+text(y = bp, x = data, labels = round(data, 4), col = "red", pos = 4)
+par(mar =c (5.1, 4.1, 2.1, 2.1))
+cat("\n\n")
+```
+
+### Authorities
+#### Plots {.tabset}
+
+```{r net-plot-authorities, results="asis", fig.width=40, fig.height=40}
+cat("##### ","Authorities network", "\n")
+
+as <- authority_score(net, weights = NA)$vector
+
+plot(net,
+	  layout = setLayout,
+	  vertex.size = as * 10,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Authorities in network",
+	   sub = "Large number of in coming connections",
+		outer = TRUE,
+	   cex.main = 4,
+	   cex.sub = 4,
+		line = -5)
+cat("\n\n")
+```
+
+```{r authorities-barplot, results="asis", fig.height=10, fig.width=10}
+cat("##### ","Authorities barplot", "\n")
+par(mar =c (5.1, 7, 2.1, 2.1))
+data <- sort(as) %>% tail(25)
+bp <- barplot(data, xlim = c(0, max(data) * 1.1), horiz = TRUE, las = 1, cex.names = 1, main = "Top 25 authorities") 
+text(y = bp, x = data, labels = round(data, 4), col = "red", pos = 4)
+par(mar =c (5.1, 4.1, 2.1, 2.1))
+cat("\n\n")
+```
+
+
+<!-- # Distances and paths -->
+
+<!-- ```{r distance-love, fig.width=40, fig.height=40} -->
+<!-- dist_from_love <- distances(net, v = V(net)["love"], to = V(net), weights = NA) -->
+
+<!-- # Set colors to plot the distances: -->
+<!-- oranges <- colorRampPalette(c("dark red", "gold")) -->
+
+<!-- col <- oranges(max(dist_from_love) + 1) -->
+
+<!-- col <- col[dist_from_love + 1] -->
+
+<!-- plot(net, -->
+<!-- 	  layout = setLayout, -->
+<!-- 	  vertex.color = col, -->
+<!-- 	  vertex.size = as * 20, -->
+<!-- 	  vertex.label = dist_from_love, -->
+<!-- 	  vertex.label.color = "white", -->
+<!-- 	  vertex.label.cex = (vertex.label.cex + 10) * as) -->
+
+<!-- title(main = "Distances from \"love\"", -->
+<!-- 		outer = TRUE, -->
+<!-- 	   cex.main = 4, -->
+<!-- 		line = -5) -->
+<!-- ``` -->
+
+# Subgroups and communities
+
+First convert the network to undirected; while accounting for the creation of possible duplicates: A -> B, B -> A.
+
+```{r collapse-undirected}
+udr <- as.undirected(net, mode = "collapse", edge.attr.comb = list(weight = "sum", "ignore")); udr
+```
+
+## Cliques
+
+```{r cliques, fig.width=40, fig.height=40}
+vcol <- rep("grey80", vcount(udr))
+
+vcol[unlist(largest_cliques(udr))] <- "gold"
+
+plot(as.undirected(udr),
+	  layout = setLayout,
+	  vertex.size = vertex.size,
+	  vertex.label = V(udr)$name,
+	  vertex.color = vcol,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+```
+
+## Community detection
+
+### Edge betweenness (Girvan-Newman)
+
+This is a hierarchical method used to detect communities in a network. Simply explained it removes edges of importance from the network (high betweeness) sequentially. Then it recalculates and selects the best partitioning of the network from the results. 
+<!-- https://kateto.net/networks-r-igraph -->
+
+The steps are:
+
+	1. The betweenness of all existing edges in the network is calculated first.
+	2. The edge(s) with the highest betweenness are removed.
+	3. The betweenness of all edges affected by the removal is recalculated.
+	4. Steps 2 and 3 are repeated until no edges remain.
+	
+This algorithm has an advantage and disadvantage:
+
+1. Only one characteristic is being recalculated during the run, this lessens computational power necessary to execute.
+2. This characteristic, betweeness must be recalculated at each step - when a network has edges cut it may have other secondary connections between clusters.
+
+*As per: - [Girvan-Newman algorithm](https://en.wikipedia.org/wiki/Girvan–Newman_algorithm)*
+
+Some examples of applications of the Girvan-Newman algorithm for community detection are: "networks of email messages, human and animal social networks, networks of collaborations between scientists and musicians, metabolic networks and gene networks" CITE
+<!-- https://arxiv.org/pdf/cond-mat/0408187.pdf -->
+
+
+```{r community-detection, fig.width=40, fig.height=20}
+ceb <- cluster_edge_betweenness(udr) 
+
+dendPlot(ceb, mode = "hclust", cex = 0.45)
+title(main = "Edge betweennes communities", sub = "Measured number of shortest paths through node", line = 1, cex = 5)
+```
+
+```{r plot-edge-betweeness-communities, fig.width=40, fig.height=40}
+plot(ceb,
+	  net,
+	  layout = setLayout,
+	  vertex.size = vertex.size,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Communities: edge betweenness (Girvan-Newman)",
+	   cex.main = 4)
+```
+
+### Propagating labels detection
+
+This is a heuristic method (by trail and error) for community detection. This method presents some advantages and disadvantages:
+
+1. It is not the most accurate nor robust method.
+2. It is one of the simplest and fastest to calculate.
+3. It can be applied to large scale networks (hundreds of millions of nodes/edges) because of its simplicity (R lang does present some limitations).
+4. No **a priori** knowledge required.
+
+<!-- https://arxiv.org/pdf/1709.05634.pdf -->
+
+This method works on undirected networks with the R implimentation of iGraph. The concept behind this algorithm is that it assignes a label to a node, randomises the labels, and replaces each label with the label that appears most frequently among neighbours. This is repeated until each vertex has a label which is most common of its neighbours. <!-- https://kateto.net/netscix2016.html -->
+
+
+```{r prop-labels-clustering, fig.width=40, fig.height=40}
+clp <- cluster_label_prop(udr)
+
+plot(clp,
+	  net,
+	  layout = setLayout,
+	  vertex.size = vertex.size,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Communities: cluster label propagation",
+	   cex.main = 4)
+```
+
+### Fast greedy modularity optimisation
+
+This is a hierarchical agglomeration algorithm. It is much faster than other methods including the Girvan-Newman algorithm presented before. The Fast greedy algorithm can be applied to networks including hundreds of thousands of vertices and millions of edges (CITE) as demonstrated by the authors - Clauset et al.
+
+This algorithm uses the quantity of modularity. This is a property of a network. Modularity is a specific proposed division of that network into communities. A good division or community partitioning is declared when there are many edges in a community, but not many between them.
+
+This algorithm does not find the optimal solution, but finds a good one in a reasonable amount of time.
+
+<!-- https://arxiv.org/pdf/cond-mat/0408187.pdf -->
+
+```{r greedy-clustering, fig.width=40, fig.height=40}
+cfg <- cluster_fast_greedy(udr)
+
+plot(cfg,
+	  net,
+	  layout = setLayout,
+	  vertex.size = vertex.size,
+	  vertex.label.cex = vertex.label.cex,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Communities: fast greedy modularity",
+	   cex.main = 4)
+```
+
+
+### K-core decomposition
+
+This another community detection method based on k-cores (1983 by Seidman). This algorithm is based on the notion of "cores" introduced by Seidman 1983. 
+
+In order to better understand this algorithm we need a better definition of K-core:
+
+- K-core of a graph is the maximal subgraph \(H \in G\); the minimum degree of \(H\) is greater or equal to \(K\). Every vertex in H is adjacent to at least K other vertices.
+
+$$
+	Kcore(G) = max(H) \in G \\
+	d(H) \geq K
+$$
+
+```{r k-core-decomp, fig.width=40, fig.height=40}
+clrs <- adjustcolor(c("gray50", "tomato", "gold", "yellowgreen"), alpha = 0.6)
+kcd <- coreness(net, mode = "all")
+
+plot(net,
+	  layout = setLayout,
+	  vertex.size = vertex.size * kcd,
+	  vertex.color = clrs[kcd],
+	  vertex.label = paste(kcd, names(kcd), sep = ", "),
+	  vertex.label.cex = vertex.label.cex + 0.25,
+	  vertex.label.dist = vertex.label.dist,
+	  vertex.label.degree = vertex.label.degree)
+
+title(main = "Communities: K-core decomposition",
+	   cex.main = 4)
+```
+
+# Session information
+
+```{r sesssion-info}
+sessionInfo()
+```
+
