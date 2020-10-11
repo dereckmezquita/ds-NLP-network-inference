@@ -33,6 +33,49 @@ In order to extract WhatsApp data go the the relevant chat, tap the top top bar 
     <img src="./images/export-telegram.png" width="450">
 </p>
 
+# TLDR (too long didn't read)
+
+Here are some the biggest hits (plots) from this project:
+
+## text-analysis.Rmd/html
+
+<p align="center">
+    <img src="./reports/text-analysis_files/figure-html/messages-per-month-horiz-1.png" width="500">
+    <img src="./reports/text-analysis_files/figure-html/messages-per-day-dist-1.png" width="500">
+    <img src="./reports/text-analysis_files/figure-html/clockplot-messages-per-hour-1.png" width="500">
+    <img src="./reports/text-analysis_files/figure-html/length-per-cat-bplots-1.png" width="500">
+    <img src="./reports/text-analysis_files/figure-html/plot-favourite-frequencies-1.png" width="500">
+    <img src="./reports/text-analysis_files/figure-html/whole-chat-cloud-1.png" width="500">
+</p>
+
+<!-- ## word-network-inference.Rmd/html
+
+<p align="center">
+    <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-corr-limit-1.png" width="600">
+    <!-- <img src="./reports/word-network-inference_files/figure-html/test-plot-varying-word-list-size-4.png" width="500"> -->
+</p> -->
+
+## word-network-analysis.Rmd/html
+
+<p align="center">
+    <img src="./reports/word-network-analysis_files/figure-html/word-network-plot-1.png" width="1000">
+</p>
+
+<p align="center">
+    <img src="./reports/word-network-analysis_files/figure-html/plot-all-layouts-1.png" width="500">
+    <img src="./reports/word-network-analysis_files/figure-html/word-net-reciprocal-1.png" width="500">
+    <img src="./reports/word-network-analysis_files/figure-html/degrees-1.png" width="500">
+    <img src="./reports/word-network-analysis_files/figure-html/degree-distribution-1.png" width="500">
+    <!-- <img src="./reports/word-network-analysis_files/figure-html/degree-barplot-1.png" width="500"> -->
+</p>
+
+### Community detection
+
+<p align="center">
+    <img src="./reports/word-network-analysis_files/figure-html/plot-edge-betweeness-communities-1.png" width="1000">
+    <img src="./reports/word-network-analysis_files/figure-html/k-core-decomp-1.png" width="1000">
+</p>
+
 ## Disclaimer and ethical considerations
 
 *This data has been collected with the express informed consent of all participants; including that of my girlfriend - she's found this whole project quite cute and funny. Please note that this data has been cleaned and censored for privacy reasons. Only results from analysis of the data are shown, the raw data shall not be publicly available; as such privacy infringement is kept to a minimum.*
