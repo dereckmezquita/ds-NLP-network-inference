@@ -7,7 +7,7 @@ outputs/*
 deprecated/
 
 # Exclude knited .md files and other for now
-/reports/*_files/
+# /reports/*_files/
 /reports/*.md
 
 # Exclude unfinished parts
