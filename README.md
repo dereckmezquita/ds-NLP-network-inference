@@ -35,7 +35,21 @@ In order to extract WhatsApp data go the the relevant chat, tap the top top bar 
 
 # TLDR (too long didn't read)
 
-Here are some the biggest hits (plots) from this project:
+Skills demonstrated in this project: 
+
+1. Experience and advanced use of R language, R Notebooks, and Git/GitHub.
+1. Handling and cleaning unstructured data.
+1. Statistical analysis of text data, and natural language processing.
+1. Network inference with custom made algorithm.
+1. Graph theory; topological analysis.
+1. Graph theory; application of clustering algorithms:
+    - Edge betweenness (Girvan-Newman).
+    - Propagating labels detection.
+    - Fast greedy modularity optimisation.
+    - K-core decomposition.
+1. Story telling and clean presentation of a complex real world personal dataset.
+
+*Here are some the biggest hits (plots) from this project:*
 
 ## text-analysis.Rmd/html
 
