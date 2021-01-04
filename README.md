@@ -4,12 +4,14 @@ The goal of this project is to analyse chat data with my girlfriend; apply stati
 
 Please note that this project is presented in knitted interactive `.html` reports, you can obtain these by downloading them from this github repo at the directory [./reports](./reports) *or* you can visit them hosted on my website at: https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/
 
-This project is broken up into three big sub-projects. The project structure is as follows (hosted report links):
+This project is broken up into three big sub-projects. The project structure is as follows:
 
-- Text mining, statistical, and exploratory analysis: [derecksnotes.com: text-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/text-analysis.html)
-- Word association network inference: [derecksnotes.com: word-network-inference.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-inference.html)
-- Word association/network topological analysis and visualisation: [derecksnotes.com: word-network-analysis.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-analysis.html)
-    - **Bonus -** interactive visualisation of network: [derecksnotes.com: word-network-interactive.html](https://www.derecksnotes.com/sharing/data-science-portfolio/ds-NLP-network-inference/word-network-interactive.html)
+- Text mining, statistical, and exploratory analysis: [derecksnotes.com: text-analysis.html](https://www.derecksnotes.com/ds-portfolio/entries/documents/text-analysis.html)
+- Word association network inference: [derecksnotes.com: word-network-inference.html](https://www.derecksnotes.com/ds-portfolio/entries/documents/word-network-inference.html)
+- Word association/network topological analysis and visualisation: [derecksnotes.com: word-network-analysis.html](https://www.derecksnotes.com/ds-portfolio/entries/documents/word-network-analysis.html)
+    - **Bonus -** interactive visualisation of network: [derecksnotes.com: word-network-interactive.html](https://www.derecksnotes.com/ds-portfolio/entries/documents/word-network-interactive.html)
+    
+For a hosted presentation on my site visit: [derecksnotes.com: ds-NLP-network-inference](https://www.derecksnotes.com/ds-portfolio/displayEntry.php?entry=ds-NLP-network-inference)
 
 Work on this project is done with: 
 
